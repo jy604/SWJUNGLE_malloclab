@@ -70,9 +70,9 @@ team_t team = {
     /* First member's email address */
     "jeongyoungp@gmail.com",
     /* Second member's full name (leave blank if none) */
-    "dongjin kim",
+    "",
     /* Second member's email address (leave blank if none) */
-    "haebin cho"
+    ""
 };
 
 /* single word (4) or double word (8) alignment */
@@ -89,7 +89,7 @@ team_t team = {
  */
 int mm_init(void)
 {
-    if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1) 
+    if ((heap_listp = mem_sbrk(6 * WSIZE)) == (void *)-1) 
     {
         return -1;
     }
@@ -99,7 +99,7 @@ int mm_init(void)
     PUT(heap_listp + (3 * WSIZE), NULL); // next pointer
     PUT(heap_listp + (4 * WSIZE), PACK(2 * DSIZE, 1)); // prologue footer, header와 동일
     PUT(heap_listp + (5 * WSIZE), PACK(0, 1)); // epilogue header
-    heap_listp += (2 * WSIZE); //prologue의 header와 footer 사이를 가리킴
+    // heap_listp += (2 * WSIZE); //prologue의 header와 footer 사이를 가리킴
     free_listp = heap_listp + DSIZE;
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
@@ -215,6 +215,7 @@ static void *coalesce(void *bp)
 
     // //case 1 : 이전, 다음 블록 모두 할당상태 > 연결 불가, 그냥 bp 반환
     // if (prev_alloc && next_alloc) {
+    //     put_new_free(bp);
     //     return bp;
     // }
 
@@ -224,28 +225,31 @@ static void *coalesce(void *bp)
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
+
     }
 
     //case 3 : 이전 free, 다음 블록 할당 > 이전 블록과 연결시키고 이전 블록 bp 반환
     else if (!prev_alloc && next_alloc) {
-        printf("%x\n", bp);
-        printf("%x\n", PREV_BLKP(bp));
+        // printf("%x\n", bp);
+        // printf("%x\n", PREV_BLKP(bp));
         
         remove_block(PREV_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
+
     }
 
     //case 4 : 둘다 free 상태 > 모두 연결하고 header는 이전 블록 bp 가리킴
-    else {
+    else if (!prev_alloc && !next_alloc) {
         remove_block(PREV_BLKP(bp));
         remove_block(NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp))); ////////////////
-        bp = PREV_BLKP(bp);
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+        bp = PREV_BLKP(bp);
+
     }
     put_new_free(bp);
     return bp;
@@ -293,7 +297,8 @@ static void place(void *bp, size_t asize)
 void put_new_free(void *bp) {
     // free_listp는 언제나 가장 늦게 들어온 free block을 가르켜야함
     // LIFO 구조이기 때문에 새로운 가용 블록은 늘 맨 앞에 위치함
-
+    // printf("put_new_free : %x\n", bp);
+    // printf("put_new_free : %x\n\n", PREV_FREE_BLKP(bp));
     NEXT_FREE_BLKP(bp) = free_listp; // free_listp는 현재 freelist에서의 제일 앞 부분을 가리키고 있으므로 그 값을 넣는다
     PREV_FREE_BLKP(bp) = NULL; // 새 가용 블록은 항상 맨앞
     PREV_FREE_BLKP(free_listp) = bp; // free_listp가 가리키고 있는 prev 블록에 bp값을 갱신함
@@ -307,6 +312,8 @@ void remove_block(void *bp) {
     {
         // 1 > 2 > 3 순으로 연결되어있는데 1번 제거
         // 1번 블록의 다음 2번 블록은 어디에 저장? > 1번 블록의 next값
+        // printf("%x\n", bp);
+        // printf("%x\n\n", PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)));
         PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) = NULL; // 1번 블록의 다음 2번 블록에 담긴 prevp를 null로 만듦 > 연결 끊기
         free_listp = NEXT_FREE_BLKP(bp);// free_listp가 다음 2번 블록을 가리킨다
     }
@@ -315,6 +322,8 @@ void remove_block(void *bp) {
         // 1 > 2 > 3 순으로 연결 되어있는데 2번 제거
         // 1번 블록에서 2번에 연결된 next를 지우고, 3번 블록의 bp를 가리켜야함
         // 3번 블록에서 2번에 연결된 prev를 지우고, 1번 블록의 bp를 가리켜야함
+    //    printf("%x\n", bp);
+    //    printf("%x", PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)));
        NEXT_FREE_BLKP(PREV_FREE_BLKP(bp)) =  NEXT_FREE_BLKP(bp); // 지금 2번 블록의 bp임... prev(bp) = 1번 블록의 주소값 / 3번의 주소값은? 현재 bp의 next값
        PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) =  PREV_FREE_BLKP(bp); //2번의 next값은 3번 
     }
