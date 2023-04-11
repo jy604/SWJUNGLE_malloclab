@@ -48,12 +48,16 @@
 #define PREV_FREE_BLKP(bp)   (*(char **)(bp))
 #define NEXT_FREE_BLKP(bp)   (*(char **)(bp + WSIZE))
 
-static char *heap_listp; //전역변수로 heap_listp void형 포인터 선언
-static char *free_listp; //제일 늦게 들어온 = 새 가용 블록을 가리키는 bp 주소
+// 주희언니는 12 : 테스트 했을때 제일 점수 잘 나오는 수였음 현지언니는 32 32인 이유 : 32bit 기준 메모리의 최댓값이 4GB라서!
+#define NUM_INDEX   20
+
+static char *heap_listp; // 전역변수로 heap_listp void형 포인터 선언
+static char *free_list[NUM_INDEX]; // segregated의 인덱스를 저장하는 배열
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
+static int find_size(size_t asize); //segregated 추가 함수
 
 void put_new_free(void *bp); // 새 가용블록을 넣는 함수
 void remove_block(void *bp); // 가용블록이 할당되었을때, 가용블록리스트에서 제거하는 함수
@@ -89,22 +93,25 @@ team_t team = {
  */
 int mm_init(void)
 {
-    if ((heap_listp = mem_sbrk(6 * WSIZE)) == (void *)-1) 
+    printf("mm_init()");
+    for (int i = 0; i = NUM_INDEX; i++)
+    {
+        free_list[i] = NULL; // 처음에는 NULL로 초기화해줘야함
+    }
+
+    if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1) 
     {
         return -1;
     }
     PUT(heap_listp, 0); // unused 패딩 값, 사용하지 않음 정렬조건을 위해서 앞에 넣어줌
     PUT(heap_listp + (1 * WSIZE), PACK(2 * DSIZE, 1)); // prologue header
-    PUT(heap_listp + (2 * WSIZE), NULL); // prev pointer
-    PUT(heap_listp + (3 * WSIZE), NULL); // next pointer
-    PUT(heap_listp + (4 * WSIZE), PACK(2 * DSIZE, 1)); // prologue footer, header와 동일
-    PUT(heap_listp + (5 * WSIZE), PACK(0, 1)); // epilogue header
+    PUT(heap_listp + (2 * WSIZE), PACK(2 * DSIZE, 1)); // prologue footer, header와 동일
+    PUT(heap_listp + (3 * WSIZE), PACK(0, 1)); // epilogue header
+    heap_listp += DSIZE;
     // heap_listp += (2 * WSIZE); //prologue의 header와 footer 사이를 가리킴
-    free_listp = heap_listp + DSIZE;
+    // free_listp = heap_listp + DSIZE;
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
-
-
     return 0;
 }
 
@@ -114,6 +121,8 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
+    printf("mm_malloc()");
+
     size_t asize; // 수정된 블록의 크기
     size_t extendsize; // 맞는 블록의 크기가 없을때 확장하는 사이즈
     char *bp;
@@ -187,6 +196,7 @@ void *mm_realloc(void *ptr, size_t size)
 // 용도 : (1) 힙 초기화 (2) mm_ 
 static void *extend_heap(size_t words)
 {
+    printf("extend_heap\n");
     char *bp;
     size_t size;
 
@@ -209,6 +219,8 @@ static void *extend_heap(size_t words)
 // 연결
 static void *coalesce(void *bp) 
 {
+    printf("coalesce\n");
+
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp))); // 이전 블록의 할당 비트의 값
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp))); // 다음(이후) 블록의 할당 비트의 값
     size_t size = GET_SIZE(HDRP(bp));
@@ -255,20 +267,33 @@ static void *coalesce(void *bp)
     return bp;
 }
 
-//first fit 기준
-//freelist중에서 처음부터 탐색해야함 lifo 구조
+// first fit 기준
+// explicit : freelist중에서 처음부터 탐색해야함 lifo 구조
+// find_index로 인덱스를 찾은 후, 인덱스를 이용해서 탐색해야함
 static void *find_fit(size_t asize)
 {
     void *bp;
-    for (bp = free_listp; GET_ALLOC(HDRP(bp)) != 1; bp = NEXT_FREE_BLKP(bp)) // free_listp에서부터 alloc이 미할당인 애들 next로 넘어가며 탐색
+    int index = find_size(asize);
+    for (int i = index; i < NUM_INDEX; i++) 
     {
-        if (GET_SIZE(HDRP(bp)) >= asize) //size가 잘 맞으면
+        //bp가 null이 아닐때까지 bp를 다음 블록으로 넘기며 탐색
+        for (bp = free_list[i]; bp != NULL; bp = NEXT_FREE_BLKP(bp))
         {
-            return bp;
+            if (GET_SIZE(HDRP(bp)) >= asize) //size가 잘 맞으면
+                return bp;
         }
     }
-    return NULL; //맞는 게 없으면 null
+    return NULL;
 }
+    
+    // for (bp = free_listp; GET_ALLOC(HDRP(bp)) != 1; bp = NEXT_FREE_BLKP(bp)) // free_listp에서부터 alloc이 미할당인 애들 next로 넘어가며 탐색
+    // {
+    //     if (GET_SIZE(HDRP(bp)) >= asize) //size가 잘 맞으면
+    //     {
+    //         return bp;
+    //     }
+    // }
+    // return NULL; //맞는 게 없으면 null
 
 // 할당 블록 배치하고 남은 블록 분할하는 함수
 static void place(void *bp, size_t asize)
@@ -293,38 +318,94 @@ static void place(void *bp, size_t asize)
     
 }
 
-// 새 가용블록을 freelist에 넣을때 next, prev, free_listp 포인터를 연결해주는 함수
+// 할당할 블록의 사이즈에 따라 free_list에서 적합한 크기의 인덱스를 찾아 블록 삽입(LIFO)
+// LIFO 구조이기 때문에 앞에 있는 애를 밀어내야함!
+// case 1 : 해당 인덱스에 아무것도 없었다면 -> 첫 삽입이라면 해당 인덱스의 free_list가 bp를 가리키게 하면 됨
+// 경우 1을 하는 이유 : 첫 초기화할때 prev, next가 아니라 null이므로 따로 나눠서 처리해줘야함
+// case 2 : 원래 가용 블록이 있다면 -> 밀어내고 첫번쨰에 삽입
 void put_new_free(void *bp) {
-    // free_listp는 언제나 가장 늦게 들어온 free block을 가르켜야함
-    // LIFO 구조이기 때문에 새로운 가용 블록은 늘 맨 앞에 위치함
-    // printf("put_new_free : %x\n", bp);
-    // printf("put_new_free : %x\n\n", PREV_FREE_BLKP(bp));
-    NEXT_FREE_BLKP(bp) = free_listp; // free_listp는 현재 freelist에서의 제일 앞 부분을 가리키고 있으므로 그 값을 넣는다
-    PREV_FREE_BLKP(bp) = NULL; // 새 가용 블록은 항상 맨앞
-    PREV_FREE_BLKP(free_listp) = bp; // free_listp가 가리키고 있는 prev 블록에 bp값을 갱신함
-    free_listp = bp; // free_listp의 값을 새로운 가용 블록의 bp로 바꿈
-}
+    // 현재 bp는 새로 들어가는 가용 블록의 bp임
+    int i = find_size(GET_SIZE(HDRP(bp)));
+    // case 1
+    if (free_list[i] == NULL)
+    {
+        PREV_FREE_BLKP(bp) = NULL;
+        NEXT_FREE_BLKP(bp) = NULL;
+        free_list[i] = bp;
+    }
+    else
+    {
+        PREV_FREE_BLKP(bp) = NULL; // 맨 앞에 들어가므로 prev는 null
+        NEXT_FREE_BLKP(bp) = free_list[i]; // next는 원래 맨 앞에 있던 블록의 bp를 가리킴
+        PREV_FREE_BLKP(free_list[i]) = bp;// 원래 들어있던 애의 prev는 지금 들어오는 bp를 가리킴
+        free_list[i] = bp; // free_list가 현재 bp를 가리키게 함
+    }
+} 
 
 // 가용블록이 할당되었을때, 가용블록리스트에서 제거하는 함수
+// 할당될 인덱스로 찾아가서 제거해줘야함
+// 맨 앞 블럭 삭제 : 걍 삭제 free_list[i] = bp
+//else : free_list[i] != bp
+// 중간 블럭 삭제 : 원래 로직 적용
+// 뒷블럭 삭제 : next가 null인 블럭 삭제 후 그 전 블럭의 next를 null로 만들어줌
+
 void remove_block(void *bp) {
+    int i = find_size(GET_SIZE(HDRP(bp))); // 인덱스 찾아오는 설정을 해줌
+    // 1 > 2 > 3
+    //case 1 : 1번 블럭을 삭제
+    if (free_list[i] == bp)
+    {
+        if (NEXT_FREE_BLKP(bp) == NULL) // 1번 블럭이 마지막 블럭일때
+        {
+            free_list[i] = NULL; //해당 인덱스는 가용 블럭이 없어짐
+        }
+        else // 뒤에 다른 블럭이 이어져 있다면
+        {
+            PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) = NULL; // 2번 블럭이 첫 블록이 되므로 2번의 prevp가 null
+            free_list[i] = NEXT_FREE_BLKP(bp); // free_list는 2번 블럭의 bp를 가리킴
+        }
+    } 
+    else //free_list[i] != bp 즉, 중간이거나 뒷블럭일때
+    {
+        if (NEXT_FREE_BLKP(bp) == NULL) // 제일 끝 블럭일때
+        {
+            NEXT_FREE_BLKP(PREV_FREE_BLKP(bp)) = NULL; // 
+        }
+        else
+        {
+            NEXT_FREE_BLKP(PREV_FREE_BLKP(bp)) =  NEXT_FREE_BLKP(bp);
+            PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) =  PREV_FREE_BLKP(bp);
+        }
+    }
+
+
+
     // 2가지 경우 : 1. 맨 앞 가용 블럭이 할당되었을경우, 2. freelist 중 중간 블럭이 할당되었을 경우
-    if (free_listp == bp) // case 1
+    // if (free_listp == bp) // case 1
+    // {
+    //     // 1 > 2 > 3 순으로 연결되어있는데 1번 제거
+    //     // 1번 블록의 다음 2번 블록은 어디에 저장? > 1번 블록의 next값
+    //     PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) = NULL; // 1번 블록의 다음 2번 블록에 담긴 prevp를 null로 만듦 > 연결 끊기
+    //     free_listp = NEXT_FREE_BLKP(bp);// free_listp가 다음 2번 블록을 가리킨다
+    // }
+    // else // case 2
+    // {
+    //     // 1 > 2 > 3 순으로 연결 되어있는데 2번 제거
+    //     // 1번 블록에서 2번에 연결된 next를 지우고, 3번 블록의 bp를 가리켜야함
+    //     // 3번 블록에서 2번에 연결된 prev를 지우고, 1번 블록의 bp를 가리켜야함
+    //    NEXT_FREE_BLKP(PREV_FREE_BLKP(bp)) =  NEXT_FREE_BLKP(bp); // 지금 2번 블록의 bp임... prev(bp) = 1번 블록의 주소값 / 3번의 주소값은? 현재 bp의 next값
+    //    PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) =  PREV_FREE_BLKP(bp); //2번의 next값은 3번 
+    // }
+}
+
+// 분리 가용 리스트에서 할당 받을 asize를 인자로 받아 어느 인덱스의 사이즈에 들어가는지 찾아주는 함수
+static int find_size(size_t asize)
+{
+    int index = 0;
+    // 인덱스가 인덱스의 최댓값보다 작고, 사이즈가 2^index보다 크다면
+    while ((index < NUM_INDEX -1 ) && !(asize <= (1 << index)))
     {
-        // 1 > 2 > 3 순으로 연결되어있는데 1번 제거
-        // 1번 블록의 다음 2번 블록은 어디에 저장? > 1번 블록의 next값
-        // printf("%x\n", bp);
-        // printf("%x\n\n", PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)));
-        PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) = NULL; // 1번 블록의 다음 2번 블록에 담긴 prevp를 null로 만듦 > 연결 끊기
-        free_listp = NEXT_FREE_BLKP(bp);// free_listp가 다음 2번 블록을 가리킨다
+        index++;
     }
-    else // case 2
-    {
-        // 1 > 2 > 3 순으로 연결 되어있는데 2번 제거
-        // 1번 블록에서 2번에 연결된 next를 지우고, 3번 블록의 bp를 가리켜야함
-        // 3번 블록에서 2번에 연결된 prev를 지우고, 1번 블록의 bp를 가리켜야함
-    //    printf("%x\n", bp);
-    //    printf("%x", PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)));
-       NEXT_FREE_BLKP(PREV_FREE_BLKP(bp)) =  NEXT_FREE_BLKP(bp); // 지금 2번 블록의 bp임... prev(bp) = 1번 블록의 주소값 / 3번의 주소값은? 현재 bp의 next값
-       PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) =  PREV_FREE_BLKP(bp); //2번의 next값은 3번 
-    }
+    return index;
 }
