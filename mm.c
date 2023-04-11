@@ -93,8 +93,8 @@ team_t team = {
  */
 int mm_init(void)
 {
-    printf("mm_init()");
-    for (int i = 0; i = NUM_INDEX; i++)
+    // printf("mm_init()");
+    for (int i = 0; i < NUM_INDEX; i++)
     {
         free_list[i] = NULL; // 처음에는 NULL로 초기화해줘야함
     }
@@ -121,7 +121,7 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-    printf("mm_malloc()");
+    // printf("mm_malloc()");
 
     size_t asize; // 수정된 블록의 크기
     size_t extendsize; // 맞는 블록의 크기가 없을때 확장하는 사이즈
@@ -196,7 +196,7 @@ void *mm_realloc(void *ptr, size_t size)
 // 용도 : (1) 힙 초기화 (2) mm_ 
 static void *extend_heap(size_t words)
 {
-    printf("extend_heap\n");
+    // printf("extend_heap\n");
     char *bp;
     size_t size;
 
@@ -219,7 +219,7 @@ static void *extend_heap(size_t words)
 // 연결
 static void *coalesce(void *bp) 
 {
-    printf("coalesce\n");
+    // printf("coalesce\n");
 
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp))); // 이전 블록의 할당 비트의 값
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp))); // 다음(이후) 블록의 할당 비트의 값
