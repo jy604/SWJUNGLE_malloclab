@@ -49,7 +49,8 @@
 #define NEXT_FREE_BLKP(bp)   (*(char **)(bp + WSIZE))
 
 // 주희언니는 12 : 테스트 했을때 제일 점수 잘 나오는 수였음 현지언니는 32 32인 이유 : 32bit 기준 메모리의 최댓값이 4GB라서!
-#define NUM_INDEX   20
+// 12하니까 오히려 82가 됨, 15는 83 16일때 84
+#define NUM_INDEX   16
 
 static char *heap_listp; // 전역변수로 heap_listp void형 포인터 선언
 static char *free_list[NUM_INDEX]; // segregated의 인덱스를 저장하는 배열
@@ -148,15 +149,6 @@ void *mm_malloc(size_t size)
         return NULL;
     place(bp, asize);
     return bp;
-
-    // int newsize = ALIGN(size + SIZE_T_SIZE);
-    // void *p = mem_sbrk(newsize);
-    // if (p == (void *)-1)
-	// return NULL;
-    // else {
-    //     *(size_t *)p = size;
-    //     return (void *)((char *)p + SIZE_T_SIZE);
-    // }
 }
 
 /*
@@ -378,24 +370,6 @@ void remove_block(void *bp) {
         }
     }
 
-
-
-    // 2가지 경우 : 1. 맨 앞 가용 블럭이 할당되었을경우, 2. freelist 중 중간 블럭이 할당되었을 경우
-    // if (free_listp == bp) // case 1
-    // {
-    //     // 1 > 2 > 3 순으로 연결되어있는데 1번 제거
-    //     // 1번 블록의 다음 2번 블록은 어디에 저장? > 1번 블록의 next값
-    //     PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) = NULL; // 1번 블록의 다음 2번 블록에 담긴 prevp를 null로 만듦 > 연결 끊기
-    //     free_listp = NEXT_FREE_BLKP(bp);// free_listp가 다음 2번 블록을 가리킨다
-    // }
-    // else // case 2
-    // {
-    //     // 1 > 2 > 3 순으로 연결 되어있는데 2번 제거
-    //     // 1번 블록에서 2번에 연결된 next를 지우고, 3번 블록의 bp를 가리켜야함
-    //     // 3번 블록에서 2번에 연결된 prev를 지우고, 1번 블록의 bp를 가리켜야함
-    //    NEXT_FREE_BLKP(PREV_FREE_BLKP(bp)) =  NEXT_FREE_BLKP(bp); // 지금 2번 블록의 bp임... prev(bp) = 1번 블록의 주소값 / 3번의 주소값은? 현재 bp의 next값
-    //    PREV_FREE_BLKP(NEXT_FREE_BLKP(bp)) =  PREV_FREE_BLKP(bp); //2번의 next값은 3번 
-    // }
 }
 
 // 분리 가용 리스트에서 할당 받을 asize를 인자로 받아 어느 인덱스의 사이즈에 들어가는지 찾아주는 함수
