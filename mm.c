@@ -105,8 +105,8 @@ int mm_init(void)
         return -1;
     }
     PUT(heap_listp, 0); // unused 패딩 값, 사용하지 않음 정렬조건을 위해서 앞에 넣어줌
-    PUT(heap_listp + (1 * WSIZE), PACK(2 * DSIZE, 1)); // prologue header
-    PUT(heap_listp + (2 * WSIZE), PACK(2 * DSIZE, 1)); // prologue footer, header와 동일
+    PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); // prologue header
+    PUT(heap_listp + (2 * WSIZE), PACK(DSIZE, 1)); // prologue footer, header와 동일
     PUT(heap_listp + (3 * WSIZE), PACK(0, 1)); // epilogue header
     heap_listp += DSIZE;
     // heap_listp += (2 * WSIZE); //prologue의 header와 footer 사이를 가리킴
